@@ -1,0 +1,30 @@
+[
+	{
+		"name": "Yash Jain",
+		"contact": {
+			"whatsapp": 9999999999,
+			"mobile": 9999999999,
+			"email": "aaaaaaaaa@aa.aaaaaaaaa",
+			"instagram": "asdasd"
+		},
+		"city/s": ["bangalore", "hyderabad"],
+		"tags": {
+			"work": ["oracle", "jpmc", "engineer", "IT", "tech", "btech"],
+			"misc": ["japan tour"]
+		}
+	},
+	{
+		"name": "Aditya Shaurya",
+		"contact": {
+			"whatsapp": 9999999999,
+			"mobile": 9999999999,
+			"email": "aaaaaaaaa@aa.aaaaaaaaa",
+			"instagram": "asdasd"
+		},
+		"city/s": ["lucknow", "hyderabad"],
+		"tags": {
+			"work": ["asian paints", "mba", "btech"],
+			"misc": ["fiitjee"]
+		}
+	}
+]
