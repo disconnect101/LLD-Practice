@@ -13,6 +13,7 @@ public class Main {
 
         int concurrentTasks = 1;
 
+        // thread for shutting everything down
         new Thread(() -> {
             try {
                 Thread.sleep(100000);
@@ -22,6 +23,7 @@ public class Main {
             threadPool.shutdownNow();
         }).start();
 
+        // tasks producer loop
         while (true) {
             for (int i=0 ; i<concurrentTasks ; i++) {
                 threadPool.submit(new Task());
