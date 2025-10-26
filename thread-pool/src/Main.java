@@ -8,13 +8,14 @@ import java.util.concurrent.BlockingQueue;
 // click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Main {
     public static void main(String[] args) throws InterruptedException {
-        ThreadPool threadPool = new ThreadPool(5, 5);
+//        ThreadPool threadPool = new FixedSizeThreadPool(5, 5);
+        ThreadPool threadPool = new DynamicSizeThreadPool(5, 1000);
 
-        int concurrentTasks = 5;
+        int concurrentTasks = 1;
 
         new Thread(() -> {
             try {
-                Thread.sleep(6000);
+                Thread.sleep(100000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -25,7 +26,7 @@ public class Main {
             for (int i=0 ; i<concurrentTasks ; i++) {
                 threadPool.submit(new Task());
             }
-            Thread.sleep(3000);
+            Thread.sleep(500);
         }
     }
 }
@@ -42,24 +43,35 @@ class Task implements Runnable {
     public void run() {
            System.out.println("Task: " + this.taskId + " in progress");
         try {
-            Thread.sleep(1000);
+            Thread.sleep(5000);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
 }
 
+interface ThreadPool {
+    public void submit(Runnable task) throws InterruptedException ;
+    public void shutdownNow();
+}
 
-class ThreadPool {
-    private BlockingQueue<Runnable> taskQueue;
-    private Map<String, Thread> threadsMap;
+class FixedSizeThreadPool implements ThreadPool {
+    protected BlockingQueue<Runnable> taskQueue;
+    protected Map<String, Thread> threadsMap;
 
-    ThreadPool(int minSize, int maxTasks) {
+    public int getMinThreadPoolSize() {
+        return minThreadPoolSize;
+    }
+
+    private int minThreadPoolSize;
+
+    FixedSizeThreadPool(int minSize, int maxTasks) {
+        this.minThreadPoolSize = minSize;
         this.taskQueue = new ArrayBlockingQueue<>(maxTasks);
         this.threadsMap = new HashMap<>();
 
         for (int i=0 ; i<minSize ; i++) {
-            Thread t = new Thread(new WorkerThread(this.taskQueue));
+            Thread t = new Thread(new Worker(this.taskQueue));
             this.threadsMap.put(t.getName(), t);
             t.start();
         }
@@ -79,12 +91,83 @@ class ThreadPool {
 
 }
 
-class WorkerThread implements Runnable {
+
+class DynamicSizeThreadPool extends FixedSizeThreadPool {
+
+    private Thread balancerThread;
+
+    DynamicSizeThreadPool(int minSize, int maxTasks) {
+        super(minSize, maxTasks);
+        this.balancerThread = dynamicallyBalanceThread();
+        this.balancerThread.start();
+    }
+
+    @Override
+    public void shutdownNow() {
+        super.shutdownNow();
+        this.balancerThread.interrupt();
+    }
+
+    private Thread dynamicallyBalanceThread() {
+        return new Thread(this::threadBalancerRunner);
+    }
+
+    private void threadBalancerRunner() {
+        String prevPeekObjectId = "";
+        while (!Thread.currentThread().isInterrupted()) {
+
+            Runnable latestTask = this.taskQueue.peek();
+            String currPeekObjectId;
+            if (latestTask != null) {
+                currPeekObjectId = latestTask.toString();
+            } else {
+                currPeekObjectId = "NO-OBJECT";
+            }
+
+
+            if (prevPeekObjectId.compareTo(currPeekObjectId) == 0) {
+                System.out.println("Waiting task detected, creating new worker thread to help");
+                Thread workerThread = new Thread(new Worker(this.taskQueue));
+                workerThread.start();
+                this.threadsMap.put(workerThread.getName(), workerThread);
+                System.out.println("Total THREADS: " + this.threadsMap.size());
+            } else if (this.threadsMap.size() > this.getMinThreadPoolSize() && this.taskQueue.isEmpty()) {
+                Map.Entry<String, Thread> e = this.threadsMap.entrySet().stream().findFirst().orElse(null);
+                if (e != null) {
+                    String threadName = e.getKey();
+                    Thread workerThread = e.getValue();
+                    System.out.println("Excess Threads detected, Stopping Worker Thread: " + threadName);
+                    workerThread.interrupt();
+                    this.threadsMap.remove(threadName);
+                }
+            }
+
+            if (!currPeekObjectId.equals("NO-OBJECT")) {
+                prevPeekObjectId = currPeekObjectId;
+            }
+
+            try{
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                System.out.println("Stopping balancer thread");
+                break;
+            }
+
+        }
+    }
+
+}
+
+
+
+
+
+class Worker implements Runnable {
 
     private BlockingQueue<Runnable> tasks;
     private Runnable currentTask;
 
-    WorkerThread(BlockingQueue<Runnable> tasks) {
+    Worker(BlockingQueue<Runnable> tasks) {
         this.tasks = tasks;
     }
 
@@ -99,7 +182,15 @@ class WorkerThread implements Runnable {
                 System.out.println("Thread: " + threadName + " was interrupted");
                 break;
             }
-            this.currentTask.run();
+
+            try {
+                this.currentTask.run();
+            } catch (RuntimeException e) {
+                if (e.getCause() instanceof InterruptedException) {
+                    System.out.println("Thread: " + threadName + " was interrupted");
+                    break;
+                }
+            }
             System.out.println("Thread: " + threadName + " has completed the task");
         }
         System.out.println("stopping thread: " + threadName);
