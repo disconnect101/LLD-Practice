@@ -4,11 +4,10 @@ import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
+
 public class Main {
     public static void main(String[] args) throws InterruptedException {
-//        ThreadPool threadPool = new FixedSizeThreadPool(5, 5);
+//      ThreadPool threadPool = new FixedSizeThreadPool(5, 5);
         ThreadPool threadPool = new DynamicSizeThreadPool(5, 1000);
 
         int concurrentTasks = 1;
@@ -16,7 +15,7 @@ public class Main {
         // thread for shutting everything down
         new Thread(() -> {
             try {
-                Thread.sleep(100000);
+                Thread.sleep(10000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -89,10 +88,17 @@ class FixedSizeThreadPool implements ThreadPool {
             System.out.println("trying to stop thread: " + threadName);
             e.getValue().interrupt();
         }
+
+        for (Map.Entry<String, Thread> entry : this.threadsMap.entrySet()) {
+            try {
+                entry.getValue().join();
+            } catch (InterruptedException e) {
+                return;
+            }
+        }
+        System.out.println("All worker threads successfully stopped!!");
     }
-
 }
-
 
 class DynamicSizeThreadPool extends FixedSizeThreadPool {
 
@@ -126,7 +132,6 @@ class DynamicSizeThreadPool extends FixedSizeThreadPool {
                 currPeekObjectId = "NO-OBJECT";
             }
 
-
             if (prevPeekObjectId.compareTo(currPeekObjectId) == 0) {
                 System.out.println("Waiting task detected, creating new worker thread to help");
                 Thread workerThread = new Thread(new Worker(this.taskQueue));
@@ -154,15 +159,10 @@ class DynamicSizeThreadPool extends FixedSizeThreadPool {
                 System.out.println("Stopping balancer thread");
                 break;
             }
-
         }
     }
 
 }
-
-
-
-
 
 class Worker implements Runnable {
 
